@@ -28,7 +28,7 @@ import { mulberry32 } from './rng.js';
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
-if (verEl) verEl.textContent = 'rev 13 (controles)';
+if (verEl) verEl.textContent = 'rev 14 (assets)';
 const urlSeed = new URLSearchParams(location.search).get('seed');
 let pendingSeed = urlSeed ? (parseInt(urlSeed, 10) | 0) : null;
 let city = null;
@@ -1150,33 +1150,35 @@ function gearSetup() {
   gearMats = { dark, olive, black };
   return gearMats;
 }
+// Los complementos van pegados a la cabeza del modelo (media caja ~0.08 de
+// ancho, frente en z +0.08), así que las medidas siguen esas proporciones.
 function guerGear(a) {
   const M = gearSetup();
   const head = a.getChildMeshes().find(m => m.name.indexOf('head') >= 0);
-  const band = CreateBox('band', { width: 0.34, height: 0.12, depth: 0.34 }, scene);
+  const band = CreateBox('band', { width: 0.18, height: 0.06, depth: 0.185 }, scene);
   band.material = M.olive;
   band.parent = head || a;
-  band.position.y = 0.16;
-  const rifle = CreateBox('rifle', { width: 0.07, height: 0.09, depth: 0.9 }, scene);
+  band.position.y = 0.035;
+  const rifle = CreateBox('rifle', { width: 0.055, height: 0.07, depth: 0.6 }, scene);
   rifle.material = M.dark;
   rifle.parent = a;
-  rifle.position.set(0.16, 0.62, 0.28);
+  rifle.position.set(0.14, 0.42, 0.11);
 }
 function crimGear(a) {
   const M = gearSetup();
   const head = a.getChildMeshes().find(m => m.name.indexOf('head') >= 0);
-  const cap = CreateBox('cap', { width: 0.34, height: 0.1, depth: 0.34 }, scene);
+  const cap = CreateBox('cap', { width: 0.185, height: 0.085, depth: 0.19 }, scene);
   cap.material = M.black;
   cap.parent = head || a;
-  cap.position.y = 0.2;
-  const brim = CreateBox('brim', { width: 0.3, height: 0.04, depth: 0.22 }, scene);
+  cap.position.y = 0.118;
+  const brim = CreateBox('brim', { width: 0.17, height: 0.035, depth: 0.1 }, scene);
   brim.material = M.black;
   brim.parent = head || a;
-  brim.position.set(0, 0.16, 0.26);
-  const mask = CreateBox('mask', { width: 0.32, height: 0.09, depth: 0.1 }, scene);
+  brim.position.set(0, 0.08, 0.115);
+  const mask = CreateBox('mask', { width: 0.175, height: 0.075, depth: 0.055 }, scene);
   mask.material = M.black;
   mask.parent = head || a;
-  mask.position.set(0, 0.02, 0.16);
+  mask.position.set(0, -0.012, 0.075);
 }
 let guerT = 5;
 function spawnGuerr() {
