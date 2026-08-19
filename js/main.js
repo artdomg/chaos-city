@@ -1,5 +1,10 @@
+import * as BABYLON from 'babylonjs';
+import 'babylonjs-loaders';
 import { generate, SIZE, T } from './city.js';
 import { mulberry32 } from './rng.js';
+
+// babylonjs-loaders (UMD) se registra sobre el BABYLON global.
+window.BABYLON = BABYLON;
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
