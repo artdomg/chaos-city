@@ -28,7 +28,7 @@ import { mulberry32 } from './rng.js';
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
-if (verEl) verEl.textContent = 'rev 12 (tráfico/disparos)';
+if (verEl) verEl.textContent = 'rev 13 (controles)';
 const urlSeed = new URLSearchParams(location.search).get('seed');
 let pendingSeed = urlSeed ? (parseInt(urlSeed, 10) | 0) : null;
 let city = null;
@@ -1680,7 +1680,6 @@ function setupTouch() {
   });
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'])
     runBtn.addEventListener(t, () => setRun(false));
-  document.getElementById('bnew').addEventListener('click', () => buildCity((Math.random() * 1e9) | 0));
 }
 const aliveEl = document.getElementById('alive');
 let aliveT = 0;
