@@ -1041,8 +1041,21 @@ function updateTraffic(dt) {
     if (Math.abs(moved) > 0.0001) runOverCheck(c, false);
   }
 }
+// Un aparcado destrozado se retira de la ciudad: fuera de la escena, de la
+// lista y de los sólidos, para que nada siga chocando con un coche que ya no
+// está.
+function removeParked(pk, i) {
+  const si = solids.indexOf(pk.sol);
+  if (si >= 0) solids.splice(si, 1);
+  const ai = cityAnchors.indexOf(pk.node);
+  if (ai >= 0) cityAnchors.splice(ai, 1);
+  pk.node.dispose();
+  parked.splice(i, 1);
+}
+
 function updateParked(dt) {
-  for (const pk of parked) {
+  for (let i = parked.length - 1; i >= 0; i--) {
+    const pk = parked[i];
     if (!pk.crashed) continue;
     pk.crashT += dt;
     flyStep(pk, dt);
@@ -1053,18 +1066,13 @@ function updateParked(dt) {
       pk.sol.y = pk.y;
     }
     fireAnim(pk);
-    // Los aparcados no reaparecen: al apagarse, el chasis se queda donde haya
-    // caído. Sigue en la lista para que una explosión cercana lo mande a volar.
-    if (pk.crashT > 7 && !pk.wreck) {
+    // Un aparcado chocado no vuelve ni deja chatarra: cuando se apaga el fuego
+    // el chasis se hunde y desaparece.
+    if (pk.crashT > 7) {
       douse(pk);
-      pk.wreck = true;
-    }
-    // flyStep sólo amortigua el giro al tocar suelo, así que sin esto el chasis
-    // se quedaría rodando despacio para siempre.
-    if (pk.wreck && !pk.fy) {
-      pk.sx = 0;
-      pk.sy = 0;
-      pk.sz = 0;
+      pk.sink = (pk.sink || 0) + dt;
+      pk.node.position.set(pk.x, pk.fy - pk.sink * 0.9, pk.y);
+      if (pk.sink > 1.2) removeParked(pk, i);
     }
   }
 }
@@ -1821,7 +1829,7 @@ engine.runRenderLoop(() => {
   } catch (e) { window.__loopErr = e.message; }
 });
 
-window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get occluders() { return occluders; }, losClear, guerShoot, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
+window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get solids() { return solids; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get occluders() { return occluders; }, losClear, guerShoot, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
 
 loadAssets().then(() => {
   buildCity(pendingSeed != null ? pendingSeed : (Math.random() * 1e9) | 0);
