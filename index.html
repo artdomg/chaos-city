@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ciudad Iso</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1622; }
+  #game { width: 100vw; height: 100vh; display: block; outline: none; }
+  #ui { position: fixed; top: 12px; left: 12px; font: 12px/1.7 monospace; color: #e8e4da; background: rgba(10, 14, 22, 0.72); padding: 10px 14px; border: 1px solid #3d7cc2; z-index: 10; border-radius: 6px; }
+  #ui h1 { margin: 0 0 4px; font-size: 14px; letter-spacing: 2px; color: #ffd977; }
+  #ui button { margin-top: 6px; background: #3d7cc2; border: 0; color: #fff; font: 12px monospace; padding: 4px 10px; cursor: pointer; border-radius: 4px; }
+  #ui button:hover { background: #5590d0; }
+  #stam { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(10,14,22,0.6); border: 1px solid #3d7cc2; border-radius: 5px; z-index: 10; opacity: 0; transition: opacity 0.25s; }
+  #stamf { height: 100%; width: 100%; background: #7dd35a; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>CIUDAD ISO</h1>
+  <div>WASD / flechas: caminar</div>
+  <div>Shift: correr</div>
+  <div>R: nueva ciudad</div>
+  <div id="seed"></div>
+  <div id="alive"></div>
+  <div id="ver"></div>
+  <button id="new">Nueva ciudad</button>
+</div>
+<div id="stam"><div id="stamf"></div></div>
+<canvas id="game"></canvas>
+<script src="node_modules/babylonjs/babylon.js"></script>
+<script src="node_modules/babylonjs-loaders/babylonjs.loaders.js"></script>
+<script type="module" src="js/main.js?v=9"></script>
+</body>
+</html>

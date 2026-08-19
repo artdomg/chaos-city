@@ -1,0 +1,10 @@
+{
+  "name": "isogame-qwen",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "babylonjs": "^9.21.2",
+    "babylonjs-loaders": "^9.21.2",
+    "phaser": "^4.2.1"
+  }
+}
