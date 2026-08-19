@@ -7,12 +7,11 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "babylonjs": "^9.21.2",
-    "babylonjs-loaders": "^9.21.2",
-    "phaser": "^4.2.1"
-  },
   "devDependencies": {
     "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^9.21.2",
+    "@babylonjs/loaders": "^9.21.2"
   }
 }
