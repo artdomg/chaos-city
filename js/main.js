@@ -28,7 +28,7 @@ import { mulberry32 } from './rng.js';
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
-if (verEl) verEl.textContent = 'rev 11 (transparencias)';
+if (verEl) verEl.textContent = 'rev 12 (tráfico/disparos)';
 const urlSeed = new URLSearchParams(location.search).get('seed');
 let pendingSeed = urlSeed ? (parseInt(urlSeed, 10) | 0) : null;
 let city = null;
@@ -589,7 +589,28 @@ function spawnTraffic() {
     placeCar(c);
   }
 }
-function assignLane(c, vert, rx, ry) {
+// Los coches que vuelven a circular entran por un extremo del carril en vez de
+// aparecer en mitad del mapa; de los dos extremos elegimos el más lejano al
+// jugador para no materializarnos delante de sus narices.
+function enterFromEdge(c) {
+  const lo = 1.5;
+  const hi = (c.axis === 'y' ? city.shoreEndX[c.ri] : SIZE - 2) - 0.5;
+  if (hi <= lo) return;
+  const side = (dir) => (c.axis === 'y'
+    ? city.roadX[c.ri] + (dir === 1 ? 0.5 : 1.5)
+    : city.roadY[c.ri] + (dir === 1 ? 1.5 : 0.5));
+  const dist = (pos, dir) => {
+    const f = side(dir);
+    const x = c.axis === 'y' ? f : pos;
+    const y = c.axis === 'y' ? pos : f;
+    return Math.hypot(x - P.x, y - P.y);
+  };
+  c.dir = dist(lo, 1) >= dist(hi, -1) ? 1 : -1;
+  c.pos = c.dir === 1 ? lo : hi;
+  c.fixed = side(c.dir);
+}
+
+function assignLane(c, vert, rx, ry, atEdge) {
   if (vert) {
     c.axis = 'y';
     c.ri = (Math.random() * rx.length) | 0;
@@ -603,6 +624,7 @@ function assignLane(c, vert, rx, ry) {
     c.fixed = ry[c.ri] + (c.dir === 1 ? 1.5 : 0.5);
     c.pos = 2 + Math.random() * (SIZE - 6);
   }
+  if (atEdge) enterFromEdge(c);
 }
 function backToLane(c) {
   let bi = -1, bd = 1e9;
@@ -915,7 +937,7 @@ function updateTraffic(dt) {
         douse(c);
         c.crashed = false;
         const vert = city.roadX.length > 0 && (city.roadY.length === 0 || Math.random() < 0.5);
-        assignLane(c, vert, city.roadX, city.roadY);
+        assignLane(c, vert, city.roadX, city.roadY, true);
         placeCar(c);
       }
       continue;
@@ -1190,23 +1212,41 @@ function spawnGuerr() {
     });
   }
 }
+// Línea de tiro: un edificio por medio corta el disparo. Recorremos el segmento
+// mirando la casilla, que es donde está la planta de los edificios.
+function losClear(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const d = Math.hypot(dx, dy);
+  if (d < 0.001) return true;
+  const steps = Math.ceil(d / 0.2);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const tx = (x1 + dx * t) | 0;
+    const ty = (y1 + dy * t) | 0;
+    if (tx < 0 || ty < 0 || tx >= SIZE || ty >= SIZE) continue;
+    if (city.tiles[ty * SIZE + tx] === T.BUILD) return false;
+  }
+  return true;
+}
+
 function guerShoot(p) {
   let best = null, bd = 9, kind = 0;
   for (const c of traffic) {
     if (c.crashed) continue;
     const d = Math.hypot(c.x - p.x, c.y - p.y);
-    if (d < bd) { bd = d; best = c; kind = 1; }
+    if (d < bd && losClear(p.x, p.y, c.x, c.y)) { bd = d; best = c; kind = 1; }
   }
   if (!best) {
     for (const q of peds) {
       if (q === p || q.guer || q.down > 0) continue;
       const d = Math.hypot(q.x - p.x, q.y - p.y);
-      if (d < bd) { bd = d; best = q; kind = 2; }
+      if (d < bd && losClear(p.x, p.y, q.x, q.y)) { bd = d; best = q; kind = 2; }
     }
   }
   if (!best && !P.down) {
     const d = Math.hypot(P.x - p.x, P.y - p.y);
-    if (d < bd) { best = P; kind = 3; }
+    if (d < bd && losClear(p.x, p.y, P.x, P.y)) { best = P; kind = 3; }
   }
   if (!best) return;
   const ux = (best.x - p.x) / (bd || 0.001), uy = (best.y - p.y) / (bd || 0.001);
@@ -1784,7 +1824,7 @@ engine.runRenderLoop(() => {
   } catch (e) { window.__loopErr = e.message; }
 });
 
-window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get occluders() { return occluders; }, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
+window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get occluders() { return occluders; }, losClear, guerShoot, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
 
 loadAssets().then(() => {
   buildCity(pendingSeed != null ? pendingSeed : (Math.random() * 1e9) | 0);
