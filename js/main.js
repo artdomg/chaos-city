@@ -2,6 +2,7 @@ import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { Scene } from '@babylonjs/core/scene.js';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { Camera } from '@babylonjs/core/Cameras/camera.js';
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
@@ -26,7 +27,7 @@ import { mulberry32 } from './rng.js';
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
-if (verEl) verEl.textContent = 'rev 9 (sprint/meteorito)';
+if (verEl) verEl.textContent = 'rev 10 (móvil)';
 const urlSeed = new URLSearchParams(location.search).get('seed');
 let pendingSeed = urlSeed ? (parseInt(urlSeed, 10) | 0) : null;
 let city = null;
@@ -302,7 +303,29 @@ const camera = new FreeCamera('cam', OFF.clone(), scene);
 camera.setTarget(Vector3.Zero());
 camera.minZ = 1;
 camera.maxZ = 300;
-camera.fov = 0.42;
+
+const BASE_FOV = 0.42;
+// Sin esto el buffer de render conserva el tamaño inicial: al girar el móvil o
+// al aparecer/ocultarse la barra del navegador la imagen sale estirada.
+function applyView() {
+  const w = window.innerWidth || 1;
+  const h = window.innerHeight || 1;
+  // El fov se aplica siempre al lado corto de la pantalla, así girar el
+  // dispositivo no cambia la escala: el lado largo enseña más ciudad.
+  camera.fovMode = w < h ? Camera.FOVMODE_HORIZONTAL_FIXED : Camera.FOVMODE_VERTICAL_FIXED;
+  // En pantallas pequeñas acercamos la cámara (hasta ~1.7x) para que el
+  // personaje no se quede diminuto.
+  const k = Math.min(1, Math.max(0.58, Math.min(w, h) / 700));
+  camera.fov = 2 * Math.atan(Math.tan(BASE_FOV / 2) * k);
+  // Los móviles tienen DPR 3-4; limitamos a 2 para no hundir el rendimiento.
+  engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
+  engine.resize();
+}
+applyView();
+window.addEventListener('resize', applyView);
+// En iOS el resize llega antes de que la ventana tenga su tamaño definitivo.
+window.addEventListener('orientationchange', () => setTimeout(applyView, 300));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', applyView);
 
 let cityAnchors = [];
 let cityMats = [];
@@ -1384,6 +1407,9 @@ function buildCity(seed) {
 }
 
 const keys = {};
+// Magnitud del movimiento actual (0..1): las teclas dan siempre 1, el joystick
+// es analógico.
+let moveMag = 0;
 const KEYMAP = {
   ArrowUp: 'up', KeyW: 'up',
   ArrowDown: 'down', KeyS: 'down',
@@ -1399,6 +1425,104 @@ window.addEventListener('keyup', e => {
   if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false;
 });
 document.getElementById('new').addEventListener('click', () => buildCity((Math.random() * 1e9) | 0));
+
+// Panel de ayuda: en pantallas pequeñas tapaba media ciudad, así que arranca
+// plegado y sólo deja el título y el cronómetro.
+const uiEl = document.getElementById('ui');
+const uiToggle = document.getElementById('uitoggle');
+let uiManual = false;
+function setUi(open) {
+  uiEl.classList.toggle('collapsed', !open);
+  uiToggle.textContent = open ? '\u2212' : '+';
+  uiToggle.setAttribute('aria-expanded', String(open));
+}
+const uiFits = () => window.innerWidth >= 720 && window.innerHeight >= 520;
+setUi(uiFits());
+uiToggle.addEventListener('click', () => {
+  uiManual = true;
+  setUi(uiEl.classList.contains('collapsed'));
+});
+window.addEventListener('resize', () => { if (!uiManual) setUi(uiFits()); });
+
+// --- Controles táctiles ---------------------------------------------------
+// Joystick flotante (aparece donde toques) + botones de sprint y nueva ciudad.
+const touchMove = { dx: 0, dy: 0, mag: 0 };
+const isTouch = new URLSearchParams(location.search).has('touch') ||
+  (matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0);
+if (isTouch) setupTouch();
+
+function setupTouch() {
+  document.body.classList.add('touch');
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('knob');
+  const R = 52;      // radio útil del joystick, en px
+  const DEAD = 0.16; // zona muerta para no derivar con el pulgar quieto
+  let id = null;
+  let cx = 0;
+  let cy = 0;
+
+  const place = (x, y) => { stick.style.left = x + 'px'; stick.style.top = y + 'px'; };
+  const rest = () => place(88, window.innerHeight - Math.min(116, window.innerHeight * 0.32));
+
+  function start(e) {
+    if (id !== null) return;
+    id = e.pointerId;
+    cx = e.clientX;
+    cy = e.clientY;
+    stick.classList.add('on');
+    place(cx, cy);
+    move(e);
+  }
+  function move(e) {
+    if (e.pointerId !== id) return;
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
+    const d = Math.hypot(dx, dy);
+    if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    const m = Math.min(1, d / R);
+    if (m < DEAD) { touchMove.mag = 0; return; }
+    // Pantalla -> isométrico: el mismo giro que hacen las teclas.
+    const wx = dy - dx;
+    const wy = dy + dx;
+    const l = Math.hypot(wx, wy) || 1;
+    touchMove.dx = wx / l;
+    touchMove.dy = wy / l;
+    touchMove.mag = (m - DEAD) / (1 - DEAD);
+  }
+  function end(e) {
+    if (e.pointerId !== id) return;
+    id = null;
+    touchMove.mag = 0;
+    knob.style.transform = '';
+    stick.classList.remove('on');
+    rest();
+  }
+  // El joystick escucha en el canvas (los botones quedan por encima), así el
+  // pulgar puede arrancar en cualquier punto libre de la pantalla.
+  canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault();
+    start(e);
+  });
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  window.addEventListener('resize', () => { if (id === null) rest(); });
+  rest();
+
+  const runBtn = document.getElementById('brun');
+  const setRun = v => { keys.run = v; runBtn.classList.toggle('on', v); };
+  runBtn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    // Con captura el dedo puede salirse del botón sin soltar el sprint.
+    try { runBtn.setPointerCapture(e.pointerId); } catch (_) { /* pointer sintético */ }
+    setRun(true);
+  });
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture'])
+    runBtn.addEventListener(t, () => setRun(false));
+  document.getElementById('bnew').addEventListener('click', () => buildCity((Math.random() * 1e9) | 0));
+}
 const aliveEl = document.getElementById('alive');
 let aliveT = 0;
 let bestT = 0;
@@ -1428,6 +1552,7 @@ engine.runRenderLoop(() => {
     if (P.down) {
       downT -= dt;
       P.moving = false;
+      moveMag = 0;
       flyStep(P, dt);
       for (const m of playerNode.getChildMeshes()) if (m.name === 'blob') m.setEnabled(false);
       if (downT <= 0) {
@@ -1446,7 +1571,19 @@ engine.runRenderLoop(() => {
     if (keys.down) { dx += 1; dy += 1; }
     if (keys.left) { dx += 1; dy -= 1; }
     if (keys.right) { dx -= 1; dy += 1; }
-    P.moving = !!(dx || dy);
+    if (dx || dy) {
+      const l = Math.hypot(dx, dy);
+      dx /= l;
+      dy /= l;
+      moveMag = 1;
+    } else if (touchMove.mag > 0) {
+      dx = touchMove.dx;
+      dy = touchMove.dy;
+      moveMag = touchMove.mag;
+    } else {
+      moveMag = 0;
+    }
+    P.moving = moveMag > 0;
     running = false;
     if (exhausted && stam > 0.35) exhausted = false;
     if (keys.run && P.moving && !exhausted && stam > 0) {
@@ -1457,9 +1594,8 @@ engine.runRenderLoop(() => {
       stam = Math.min(1, stam + dt / 4.5);
     }
     if (P.moving) {
-      const l = Math.hypot(dx, dy);
       const base = exhausted ? 4.6 * 0.55 : 4.6;
-      const sp = ((running ? base * 1.75 : base) * dt) / l;
+      const sp = (running ? base * 1.75 : base) * dt * moveMag;
       const nx = P.x + dx * sp;
       const ny = P.y + dy * sp;
       if (canStand(nx, P.y)) P.x = nx;
@@ -1481,7 +1617,7 @@ engine.runRenderLoop(() => {
       lastAliveS = Math.floor(aliveT);
       aliveEl.textContent = 'sin morir: ' + fmtT(aliveT) + ' (record ' + fmtT(bestT) + ')';
     }
-    if (P.moving) walkT += dt * (running ? 16 : 11);
+    if (P.moving) walkT += dt * (running ? 16 : 11) * (0.45 + 0.55 * moveMag);
     const swT = P.moving ? Math.sin(walkT) * 0.7 : 0;
     swing += (swT - swing) * Math.min(1, dt * 15);
     idleAmp += ((P.moving ? 0 : 1) - idleAmp) * Math.min(1, dt * 5);
@@ -1533,7 +1669,7 @@ engine.runRenderLoop(() => {
   } catch (e) { window.__loopErr = e.message; }
 });
 
-window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
+window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
 
 loadAssets().then(() => {
   buildCity(pendingSeed != null ? pendingSeed : (Math.random() * 1e9) | 0);
