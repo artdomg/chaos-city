@@ -13,6 +13,7 @@ import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder.js';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder.js';
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder.js';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder.js';
+import { Material } from '@babylonjs/core/Materials/material.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration.js';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
@@ -27,7 +28,7 @@ import { mulberry32 } from './rng.js';
 
 const seedEl = document.getElementById('seed');
 const verEl = document.getElementById('ver');
-if (verEl) verEl.textContent = 'rev 10 (móvil)';
+if (verEl) verEl.textContent = 'rev 11 (transparencias)';
 const urlSeed = new URLSearchParams(location.search).get('seed');
 let pendingSeed = urlSeed ? (parseInt(urlSeed, 10) | 0) : null;
 let city = null;
@@ -329,6 +330,8 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', appl
 
 let cityAnchors = [];
 let cityMats = [];
+// Objetos estáticos que pueden tapar al jugador (edificios y árboles).
+let occluders = [];
 let groundMesh = null;
 let groundMats = [];
 let waterPlane = null;
@@ -402,6 +405,7 @@ function clearCity() {
   }
   cityAnchors = [];
   cityMats = [];
+  occluders = [];
   groundMats = [];
   limbs = null;
 }
@@ -429,6 +433,114 @@ const PED_COLORS = [
 const CRIM_COLORS = [
   [0.12, 0.12, 0.14], [0.2, 0.08, 0.08], [0.08, 0.16, 0.1], [0.15, 0.1, 0.2]
 ];
+
+// --- Transparencia de lo que tapa al jugador -------------------------------
+// Las piezas de la ciudad son InstancedMesh y comparten material con su
+// plantilla, así que no se les puede bajar la opacidad una a una. Para el que
+// estorba clonamos sus mallas (la geometría se reaprovecha), les ponemos un
+// material en modo mezcla y jugamos con mesh.visibility, que sí es por malla.
+const FADE_ALPHA = 0.3;
+const ghostMats = new Map();
+
+function ghostMat(src) {
+  let g = ghostMats.get(src);
+  if (!g) {
+    g = src.clone('ghost_' + src.name);
+    g.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    g.backFaceCulling = true;
+    ghostMats.set(src, g);
+  }
+  return g;
+}
+
+function addOccluder(node) {
+  const min = new Vector3(Infinity, Infinity, Infinity);
+  const max = new Vector3(-Infinity, -Infinity, -Infinity);
+  for (const m of node.getChildMeshes()) {
+    m.computeWorldMatrix(true);
+    const bb = m.getBoundingInfo().boundingBox;
+    min.minimizeInPlace(bb.minimumWorld);
+    max.maximizeInPlace(bb.maximumWorld);
+  }
+  if (min.x > max.x) return;
+  // Margen: el rayo va al pecho del jugador, pero lo que tapa la cabeza o un
+  // costado también molesta.
+  occluders.push({
+    node,
+    x0: min.x - 0.4, x1: max.x + 0.4,
+    y0: min.y - 0.5, y1: max.y + 0.5,
+    z0: min.z - 0.4, z1: max.z + 0.4,
+    a: 1,
+    on: false,
+    parts: null,
+  });
+}
+
+function makeGhosts(o) {
+  o.parts = [];
+  for (const inst of o.node.getChildMeshes()) {
+    if (!inst.getClassName || inst.getClassName() !== 'InstancedMesh') continue;
+    const g = inst.sourceMesh.clone(inst.name + 'ghost', inst.parent, true);
+    g.position.copyFrom(inst.position);
+    if (inst.rotationQuaternion) g.rotationQuaternion = inst.rotationQuaternion.clone();
+    else { g.rotationQuaternion = null; g.rotation.copyFrom(inst.rotation); }
+    g.scaling.copyFrom(inst.scaling);
+    if (inst.sourceMesh.material) g.material = ghostMat(inst.sourceMesh.material);
+    g.isPickable = false;
+    g.setEnabled(false);
+    o.parts.push({ g, inst });
+  }
+}
+
+// Corte del segmento con la caja (slab test); origen dentro cuenta como corte.
+function segBox(o, px, py, pz, dx, dy, dz, len) {
+  let t0 = 0;
+  let t1 = len;
+  const axes = [[px, dx, o.x0, o.x1], [py, dy, o.y0, o.y1], [pz, dz, o.z0, o.z1]];
+  for (const [p, d, lo, hi] of axes) {
+    if (Math.abs(d) < 1e-6) {
+      if (p < lo || p > hi) return false;
+      continue;
+    }
+    let ta = (lo - p) / d;
+    let tb = (hi - p) / d;
+    if (ta > tb) { const tmp = ta; ta = tb; tb = tmp; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
+function updateFade(dt) {
+  if (!occluders.length || !playerNode) return;
+  // Del pecho del jugador hacia la cámara: lo que corte ese segmento estorba.
+  const px = playerNode.position.x;
+  const py = playerNode.position.y + 0.85;
+  const pz = playerNode.position.z;
+  let dx = camera.position.x - px;
+  let dy = camera.position.y - py;
+  let dz = camera.position.z - pz;
+  const len = Math.hypot(dx, dy, dz) || 1;
+  dx /= len; dy /= len; dz /= len;
+  const k = Math.min(1, dt * 9);
+  for (const o of occluders) {
+    const target = segBox(o, px, py, pz, dx, dy, dz, len) ? FADE_ALPHA : 1;
+    o.a += (target - o.a) * k;
+    if (target === 1 && o.a > 0.99) o.a = 1;
+    if (o.a < 1) {
+      if (!o.parts) makeGhosts(o);
+      if (!o.on) {
+        o.on = true;
+        for (const p of o.parts) { p.g.setEnabled(true); p.inst.setEnabled(false); }
+      }
+      for (const p of o.parts) p.g.visibility = o.a;
+    } else if (o.on) {
+      o.on = false;
+      for (const p of o.parts) { p.g.setEnabled(false); p.inst.setEnabled(true); }
+    }
+  }
+}
 
 function deinstance(anchor, match) {
   const list = anchor.getChildMeshes().filter(m => m.getClassName && m.getClassName() === 'InstancedMesh' && m.name.indexOf(match) >= 0);
@@ -1312,6 +1424,7 @@ function buildCity(seed) {
     a.scaling.y = 0.65 + ((b.x * 13 + b.y * 7 + b.si * 5) % 10) / 11;
     a.scaling.x = a.scaling.z = 0.92 + ((b.x + b.y * 3) % 4) * 0.03;
     blob(b.w + 0.25, b.d + 0.25, a);
+    addOccluder(a);
   }
 
   for (const dcr of city.decor) {
@@ -1324,6 +1437,7 @@ function buildCity(seed) {
       const sc = 0.9 + ((x + z) % 3) * 0.12;
       a.scaling.setAll(sc);
       blob(0.95 * sc, 0.95 * sc, a);
+      addOccluder(a);
     } else if (dcr.kind === 'lamp') {
       solids.push({ x, y: z, r: 0.15 });
       const a = spawn('lamp');
@@ -1658,6 +1772,7 @@ engine.runRenderLoop(() => {
     follow.z += (P.y - follow.z) * Math.min(1, dt * 6);
     camera.position.x = follow.x + OFF.x;
     camera.position.z = follow.z + OFF.z;
+    updateFade(dt);
   }
 
   waterT += dt;
@@ -1669,7 +1784,7 @@ engine.runRenderLoop(() => {
   } catch (e) { window.__loopErr = e.message; }
 });
 
-window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
+window.__game = { scene, camera, engine, build: buildCity, get city() { return city; }, get P() { return P; }, get limbs() { return limbs; }, get swing() { return swing; }, get traffic() { return traffic; }, get parked() { return parked; }, get peds() { return peds; }, get nades() { return nades; }, get off() { return OFF; }, get pedSpots() { return pedSpots; }, get stam() { return stam; }, get exhausted() { return exhausted; }, get running() { return running; }, get moveMag() { return moveMag; }, get occluders() { return occluders; }, get meteor() { return meteor; }, get camp() { return camp; }, respawnPed, ignite, explode };
 
 loadAssets().then(() => {
   buildCity(pendingSeed != null ? pendingSeed : (Math.random() * 1e9) | 0);
