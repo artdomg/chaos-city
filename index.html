@@ -2,31 +2,156 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Ciudad Iso</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1622; }
-  #game { width: 100vw; height: 100vh; display: block; outline: none; }
-  #ui { position: fixed; top: 12px; left: 12px; font: 12px/1.7 monospace; color: #e8e4da; background: rgba(10, 14, 22, 0.72); padding: 10px 14px; border: 1px solid #3d7cc2; z-index: 10; border-radius: 6px; }
-  #ui h1 { margin: 0 0 4px; font-size: 14px; letter-spacing: 2px; color: #ffd977; }
-  #ui button { margin-top: 6px; background: #3d7cc2; border: 0; color: #fff; font: 12px monospace; padding: 4px 10px; cursor: pointer; border-radius: 4px; }
-  #ui button:hover { background: #5590d0; }
-  #stam { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); width: 220px; height: 10px; background: rgba(10,14,22,0.6); border: 1px solid #3d7cc2; border-radius: 5px; z-index: 10; opacity: 0; transition: opacity 0.25s; }
+  body {
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  /* fixed + inset en vez de 100vw/100vh: en móvil el 100vh incluye la barra de
+     direcciones y el canvas acaba con un tamaño distinto al de la ventana. */
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+
+  #ui {
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    font: 12px/1.7 monospace;
+    color: #e8e4da;
+    background: rgba(10, 14, 22, 0.72);
+    padding: 8px 12px;
+    border: 1px solid #3d7cc2;
+    z-index: 10;
+    border-radius: 6px;
+    max-width: min(68vw, 320px);
+  }
+  #uihead { display: flex; align-items: center; gap: 10px; }
+  #ui h1 { margin: 0; font-size: 14px; letter-spacing: 2px; color: #ffd977; flex: 1; }
+  #uitoggle {
+    flex: none;
+    background: transparent;
+    border: 1px solid #3d7cc2;
+    color: #cfe0f2;
+    font: 12px/1 monospace;
+    padding: 5px 9px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #ui.collapsed #uibody { display: none; }
+  #ui button#new { margin-top: 6px; background: #3d7cc2; border: 0; color: #fff; font: 12px monospace; padding: 6px 12px; cursor: pointer; border-radius: 4px; }
+  #ui button#new:hover { background: #5590d0; }
+  #alive { color: #cfe0f2; }
+  /* Las ayudas de teclado y las táctiles se excluyen entre sí. */
+  .tc { display: none; }
+  body.touch .kb { display: none; }
+  body.touch .tc { display: block; }
+
+  #stam {
+    position: fixed;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 220px;
+    height: 10px;
+    background: rgba(10, 14, 22, 0.6);
+    border: 1px solid #3d7cc2;
+    border-radius: 5px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
   #stamf { height: 100%; width: 100%; background: #7dd35a; border-radius: 4px; }
+  /* En táctil la barra baja del todo para no cruzarse con el joystick. */
+  body.touch #stam { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: min(38vw, 160px); }
+
+  /* --- Controles táctiles ------------------------------------------------ */
+  #touch { position: fixed; inset: 0; z-index: 20; display: none; pointer-events: none; }
+  body.touch #touch { display: block; }
+  #stick {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 120px;
+    height: 120px;
+    margin: -60px 0 0 -60px;
+    border-radius: 50%;
+    border: 2px solid rgba(61, 124, 194, 0.8);
+    background: rgba(10, 14, 22, 0.3);
+    opacity: 0.4;
+    transition: opacity 0.15s;
+  }
+  #stick.on { opacity: 0.9; }
+  #knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 54px;
+    height: 54px;
+    margin: -27px 0 0 -27px;
+    border-radius: 50%;
+    background: rgba(61, 124, 194, 0.85);
+    border: 2px solid #cfe0f2;
+  }
+  #tbtns {
+    position: absolute;
+    right: calc(16px + env(safe-area-inset-right, 0px));
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  #tbtns button {
+    pointer-events: auto;
+    touch-action: none;
+    color: #fff;
+    background: rgba(61, 124, 194, 0.85);
+    border: 2px solid #cfe0f2;
+    border-radius: 50%;
+    font: 12px/1 monospace;
+    letter-spacing: 1px;
+    width: 82px;
+    height: 82px;
+  }
+  #brun.on { background: #ffd977; color: #22303f; }
+  #bnew { width: 58px; height: 58px; font-size: 22px; background: rgba(10, 14, 22, 0.6); border-color: #3d7cc2; }
 </style>
 </head>
 <body>
 <div id="ui">
-  <h1>CIUDAD ISO</h1>
-  <div>WASD / flechas: caminar</div>
-  <div>Shift: correr</div>
-  <div>R: nueva ciudad</div>
-  <div id="seed"></div>
+  <div id="uihead">
+    <h1>CIUDAD ISO</h1>
+    <button id="uitoggle" type="button" aria-controls="uibody" aria-expanded="true" aria-label="Mostrar u ocultar la ayuda">&minus;</button>
+  </div>
+  <div id="uibody">
+    <div class="kb">WASD / flechas: caminar</div>
+    <div class="kb">Shift: correr</div>
+    <div class="kb">R: nueva ciudad</div>
+    <div class="tc">Joystick: caminar</div>
+    <div class="tc">CORRER: sprint</div>
+    <div class="tc">&#8635;: nueva ciudad</div>
+    <div id="seed"></div>
+    <div id="ver"></div>
+    <button id="new" type="button">Nueva ciudad</button>
+  </div>
   <div id="alive"></div>
-  <div id="ver"></div>
-  <button id="new">Nueva ciudad</button>
 </div>
 <div id="stam"><div id="stamf"></div></div>
+<div id="touch">
+  <div id="stick"><div id="knob"></div></div>
+  <div id="tbtns">
+    <button id="brun" type="button">CORRER</button>
+    <button id="bnew" type="button" aria-label="Nueva ciudad">&#8635;</button>
+  </div>
+</div>
 <canvas id="game"></canvas>
 <script type="module" src="/js/main.js"></script>
 </body>
