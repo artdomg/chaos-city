@@ -1,3 +1,26 @@
+import { Engine } from '@babylonjs/core/Engines/engine.js';
+import { Scene } from '@babylonjs/core/scene.js';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color.js';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera.js';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
+import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder.js';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder.js';
+import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder.js';
+import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder.js';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration.js';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture.js';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture.js';
+import { appendSceneAsync } from '@babylonjs/core/Loading/sceneLoader.js';
+// Side-effects: pantalla de carga por defecto del SceneLoader y lector de .glb.
+import '@babylonjs/core/Loading/loadingScreen.js';
+import '@babylonjs/loaders/glTF/2.0/glTFLoader.js';
+
 import { generate, SIZE, T } from './city.js';
 import { mulberry32 } from './rng.js';
 
@@ -219,15 +242,15 @@ function buildGroundMesh(mat) {
       idx.push(a, b, c, b, d, c);
     }
   const normals = [];
-  BABYLON.VertexData.ComputeNormals(pos, idx, normals);
-  const vd = new BABYLON.VertexData();
+  VertexData.ComputeNormals(pos, idx, normals);
+  const vd = new VertexData();
   vd.positions = pos;
   vd.uvs = uvs;
   vd.indices = idx;
   vd.normals = normals;
-  const m = new BABYLON.Mesh('g', scene);
+  const m = new Mesh('g', scene);
   vd.applyToMesh(m);
-  m.position = new BABYLON.Vector3(SIZE / 2 - 0.5, 0, SIZE / 2 - 0.5);
+  m.position = new Vector3(SIZE / 2 - 0.5, 0, SIZE / 2 - 0.5);
   m.material = mat;
   return m;
 }
@@ -256,27 +279,27 @@ function canStand(x, y) {
 }
 
 const canvas = document.getElementById('game');
-const engine = new BABYLON.Engine(canvas, true);
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.52, 0.72, 0.9, 1);
+const engine = new Engine(canvas, true);
+const scene = new Scene(engine);
+scene.clearColor = new Color4(0.52, 0.72, 0.9, 1);
 scene.imageProcessingConfiguration.toneMappingEnabled = true;
-scene.imageProcessingConfiguration.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
-scene.ambientColor = new BABYLON.Color3(0.25, 0.28, 0.32);
-scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR;
-scene.fogColor = new BABYLON.Color3(0.52, 0.72, 0.9);
+scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+scene.ambientColor = new Color3(0.25, 0.28, 0.32);
+scene.fogMode = Scene.FOGMODE_LINEAR;
+scene.fogColor = new Color3(0.52, 0.72, 0.9);
 scene.fogStart = 95;
 scene.fogEnd = 170;
 
-const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
+const hemi = new HemisphericLight('hemi', new Vector3(0, 1, 0), scene);
 hemi.intensity = 0.5;
-hemi.groundColor = new BABYLON.Color3(0.4, 0.42, 0.45);
-const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.6, -0.9, -0.4), scene);
-sun.diffuse = new BABYLON.Color3(1, 0.95, 0.85);
+hemi.groundColor = new Color3(0.4, 0.42, 0.45);
+const sun = new DirectionalLight('sun', new Vector3(-0.6, -0.9, -0.4), scene);
+sun.diffuse = new Color3(1, 0.95, 0.85);
 sun.intensity = 1.6;
 
-const OFF = new BABYLON.Vector3(0.72, 0.78, 0.72).normalize().scale(58);
-const camera = new BABYLON.FreeCamera('cam', OFF.clone(), scene);
-camera.setTarget(BABYLON.Vector3.Zero());
+const OFF = new Vector3(0.72, 0.78, 0.72).normalize().scale(58);
+const camera = new FreeCamera('cam', OFF.clone(), scene);
+camera.setTarget(Vector3.Zero());
 camera.minZ = 1;
 camera.maxZ = 300;
 camera.fov = 0.42;
@@ -301,7 +324,7 @@ ASSET_NAMES.push('tree_round', 'tree_cone', 'lamp', 'car', 'boat', 'player');
 async function loadAssets() {
   for (const n of ASSET_NAMES) {
     const before = new Set(scene.meshes);
-    await BABYLON.SceneLoader.AppendAsync('assets/', n + '.glb?v=2', scene);
+    await appendSceneAsync('assets/' + n + '.glb', scene);
     const added = scene.meshes.filter(m => !before.has(m));
     const addedSet = new Set(added);
     const roots = added.filter(m => !m.parent || !addedSet.has(m.parent));
@@ -311,7 +334,7 @@ async function loadAssets() {
 }
 
 function spawn(name) {
-  const anchor = new BABYLON.TransformNode('a', scene);
+  const anchor = new TransformNode('a', scene);
   for (const r of templates[name]) {
     const cl = r.instantiateHierarchy();
     if (cl) cl.parent = anchor;
@@ -366,7 +389,7 @@ const CAR_COLORS = [
 ];
 
 function blob(sx, sz, parent, y) {
-  const b = BABYLON.MeshBuilder.CreateDisc('blob', { radius: 0.5, tessellation: 20 }, scene);
+  const b = CreateDisc('blob', { radius: 0.5, tessellation: 20 }, scene);
   b.rotation.x = Math.PI / 2;
   b.scaling.x = sx;
   b.scaling.y = sz;
@@ -401,7 +424,7 @@ function recolorBody(anchor, col) {
   for (const m of anchor.getChildMeshes()) {
     if (m.name.indexOf('body') >= 0 && m.material) {
       const cm = m.material.clone('bodymat');
-      cm.albedoColor = new BABYLON.Color3(col[0], col[1], col[2]);
+      cm.albedoColor = new Color3(col[0], col[1], col[2]);
       m.material = cm;
       cityMats.push(cm);
     }
@@ -419,7 +442,7 @@ function spawnTraffic() {
     for (const m of a.getChildMeshes()) {
       if (m.material && m.material.name.indexOf('car_body') === 0) {
         const cm = m.material.clone('carmat');
-        cm.albedoColor = new BABYLON.Color3(col[0], col[1], col[2]);
+        cm.albedoColor = new Color3(col[0], col[1], col[2]);
         m.material = cm;
         cityMats.push(cm);
       }
@@ -524,26 +547,26 @@ function makeFire(c) {
   c.boom = Math.random() < 0.3;
   c.boomT = 1.5 + Math.random() * 2.5;
   if (!fireMat) {
-    fireMat = new BABYLON.StandardMaterial('fire', scene);
-    fireMat.diffuseColor = new BABYLON.Color3(1, 0.35, 0.05);
-    fireMat.emissiveColor = new BABYLON.Color3(1, 0.45, 0.08);
-    fireMat.specularColor = new BABYLON.Color3(0, 0, 0);
-    smokeMat = new BABYLON.StandardMaterial('smoke', scene);
-    smokeMat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.15);
-    smokeMat.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+    fireMat = new StandardMaterial('fire', scene);
+    fireMat.diffuseColor = new Color3(1, 0.35, 0.05);
+    fireMat.emissiveColor = new Color3(1, 0.45, 0.08);
+    fireMat.specularColor = new Color3(0, 0, 0);
+    smokeMat = new StandardMaterial('smoke', scene);
+    smokeMat.diffuseColor = new Color3(0.15, 0.15, 0.15);
+    smokeMat.emissiveColor = new Color3(0.1, 0.1, 0.1);
     smokeMat.alpha = 0.55;
-    smokeMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    smokeMat.specularColor = new Color3(0, 0, 0);
   }
   const flames = [], smokes = [];
   for (let i = 0; i < 3; i++) {
-    const f = BABYLON.MeshBuilder.CreateBox('flame', { size: 0.28 }, scene);
+    const f = CreateBox('flame', { size: 0.28 }, scene);
     f.material = fireMat;
     f.parent = c.node;
     f.position.set((Math.random() - 0.5) * 0.7, 0.35, (Math.random() - 0.5) * 0.4);
     flames.push({ m: f, ph: Math.random() * 6 });
   }
   for (let i = 0; i < 2; i++) {
-    const s = BABYLON.MeshBuilder.CreateBox('smoke', { size: 0.34 }, scene);
+    const s = CreateBox('smoke', { size: 0.34 }, scene);
     s.material = smokeMat;
     s.parent = c.node;
     smokes.push({ m: s, ph: Math.random() * 1.4 });
@@ -567,21 +590,21 @@ function douse(c) {
 let camp = { x: 0, y: 0, t: 0 };
 let meteor = null;
 function spawnMeteor(tx, ty) {
-  const disc = BABYLON.MeshBuilder.CreateDisc('mwarn', { radius: 3, tessellation: 24 }, scene);
+  const disc = CreateDisc('mwarn', { radius: 3, tessellation: 24 }, scene);
   disc.rotation.x = Math.PI / 2;
   disc.position.set(tx, 0.09, ty);
-  const dm = new BABYLON.StandardMaterial('mwarnM', scene);
-  dm.emissiveColor = new BABYLON.Color3(1, 0.25, 0.1);
-  dm.diffuseColor = new BABYLON.Color3(0.8, 0.15, 0.05);
+  const dm = new StandardMaterial('mwarnM', scene);
+  dm.emissiveColor = new Color3(1, 0.25, 0.1);
+  dm.diffuseColor = new Color3(0.8, 0.15, 0.05);
   dm.alpha = 0.35;
-  dm.specularColor = new BABYLON.Color3(0, 0, 0);
+  dm.specularColor = new Color3(0, 0, 0);
   dm.backFaceCulling = false;
   disc.material = dm;
-  const rock = BABYLON.MeshBuilder.CreateSphere('meteor', { diameter: 1.3, segments: 10 }, scene);
-  const rm = new BABYLON.StandardMaterial('meteorM', scene);
-  rm.diffuseColor = new BABYLON.Color3(0.25, 0.15, 0.1);
-  rm.emissiveColor = new BABYLON.Color3(1, 0.4, 0.08);
-  rm.specularColor = new BABYLON.Color3(0, 0, 0);
+  const rock = CreateSphere('meteor', { diameter: 1.3, segments: 10 }, scene);
+  const rm = new StandardMaterial('meteorM', scene);
+  rm.diffuseColor = new Color3(0.25, 0.15, 0.1);
+  rm.emissiveColor = new Color3(1, 0.4, 0.08);
+  rm.specularColor = new Color3(0, 0, 0);
   rock.material = rm;
   rock.position.set(tx + 6, 26, ty - 3);
   return { t: 0, warn: 2.2, fall: 1.1, tx, ty, disc, dm, rock };
@@ -625,12 +648,12 @@ let nadeMat = null;
 let nades = [];
 function throwNade(p, tx, ty) {
   if (!nadeMat) {
-    nadeMat = new BABYLON.StandardMaterial('nade', scene);
-    nadeMat.diffuseColor = new BABYLON.Color3(0.1, 0.18, 0.08);
-    nadeMat.emissiveColor = new BABYLON.Color3(0.05, 0.1, 0.04);
-    nadeMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    nadeMat = new StandardMaterial('nade', scene);
+    nadeMat.diffuseColor = new Color3(0.1, 0.18, 0.08);
+    nadeMat.emissiveColor = new Color3(0.05, 0.1, 0.04);
+    nadeMat.specularColor = new Color3(0, 0, 0);
   }
-  const m = BABYLON.MeshBuilder.CreateBox('nade', { size: 0.14 }, scene);
+  const m = CreateBox('nade', { size: 0.14 }, scene);
   m.material = nadeMat;
   const T = 0.9;
   const h0 = 0.6;
@@ -675,12 +698,12 @@ function boomStep(c) {
 }
 function explode(x, y, R) {
   R = R || 2.6;
-  const m = new BABYLON.StandardMaterial('boomM', scene);
-  m.emissiveColor = new BABYLON.Color3(1, 0.32, 0.04);
-  m.diffuseColor = new BABYLON.Color3(0.9, 0.25, 0.02);
-  m.specularColor = new BABYLON.Color3(0, 0, 0);
+  const m = new StandardMaterial('boomM', scene);
+  m.emissiveColor = new Color3(1, 0.32, 0.04);
+  m.diffuseColor = new Color3(0.9, 0.25, 0.02);
+  m.specularColor = new Color3(0, 0, 0);
   m.alpha = 0.9;
-  const s = BABYLON.MeshBuilder.CreateSphere('boom', { diameter: 1.2, segments: 12 }, scene);
+  const s = CreateSphere('boom', { diameter: 1.2, segments: 12 }, scene);
   s.material = m;
   s.position.set(x, 0.7, y);
   booms.push({ m: s, mat: m, t: 0 });
@@ -926,13 +949,13 @@ let tracers = [];
 let tracerMat = null;
 function tracer(x1, y1, x2, y2) {
   if (!tracerMat) {
-    tracerMat = new BABYLON.StandardMaterial('tr', scene);
-    tracerMat.emissiveColor = new BABYLON.Color3(1, 0.85, 0.3);
-    tracerMat.diffuseColor = new BABYLON.Color3(1, 0.7, 0.1);
-    tracerMat.specularColor = new BABYLON.Color3(0, 0, 0);
+    tracerMat = new StandardMaterial('tr', scene);
+    tracerMat.emissiveColor = new Color3(1, 0.85, 0.3);
+    tracerMat.diffuseColor = new Color3(1, 0.7, 0.1);
+    tracerMat.specularColor = new Color3(0, 0, 0);
   }
   const d = Math.hypot(x2 - x1, y2 - y1) || 0.001;
-  const m = BABYLON.MeshBuilder.CreateBox('tracer', { width: d, height: 0.035, depth: 0.035 }, scene);
+  const m = CreateBox('tracer', { width: d, height: 0.035, depth: 0.035 }, scene);
   m.material = tracerMat;
   m.position.set((x1 + x2) / 2, 0.55, (y1 + y2) / 2);
   m.rotation.y = Math.atan2(-(y2 - y1), x2 - x1);
@@ -951,26 +974,26 @@ function updateTracers(dt) {
 let gearMats = null;
 function gearSetup() {
   if (gearMats) return gearMats;
-  const dark = new BABYLON.StandardMaterial('gearD', scene);
-  dark.diffuseColor = new BABYLON.Color3(0.08, 0.08, 0.09);
-  dark.specularColor = new BABYLON.Color3(0, 0, 0);
-  const olive = new BABYLON.StandardMaterial('gearO', scene);
-  olive.diffuseColor = new BABYLON.Color3(0.3, 0.35, 0.16);
-  olive.specularColor = new BABYLON.Color3(0, 0, 0);
-  const black = new BABYLON.StandardMaterial('gearB', scene);
-  black.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.06);
-  black.specularColor = new BABYLON.Color3(0, 0, 0);
+  const dark = new StandardMaterial('gearD', scene);
+  dark.diffuseColor = new Color3(0.08, 0.08, 0.09);
+  dark.specularColor = new Color3(0, 0, 0);
+  const olive = new StandardMaterial('gearO', scene);
+  olive.diffuseColor = new Color3(0.3, 0.35, 0.16);
+  olive.specularColor = new Color3(0, 0, 0);
+  const black = new StandardMaterial('gearB', scene);
+  black.diffuseColor = new Color3(0.05, 0.05, 0.06);
+  black.specularColor = new Color3(0, 0, 0);
   gearMats = { dark, olive, black };
   return gearMats;
 }
 function guerGear(a) {
   const M = gearSetup();
   const head = a.getChildMeshes().find(m => m.name.indexOf('head') >= 0);
-  const band = BABYLON.MeshBuilder.CreateBox('band', { width: 0.34, height: 0.12, depth: 0.34 }, scene);
+  const band = CreateBox('band', { width: 0.34, height: 0.12, depth: 0.34 }, scene);
   band.material = M.olive;
   band.parent = head || a;
   band.position.y = 0.16;
-  const rifle = BABYLON.MeshBuilder.CreateBox('rifle', { width: 0.07, height: 0.09, depth: 0.9 }, scene);
+  const rifle = CreateBox('rifle', { width: 0.07, height: 0.09, depth: 0.9 }, scene);
   rifle.material = M.dark;
   rifle.parent = a;
   rifle.position.set(0.16, 0.62, 0.28);
@@ -978,15 +1001,15 @@ function guerGear(a) {
 function crimGear(a) {
   const M = gearSetup();
   const head = a.getChildMeshes().find(m => m.name.indexOf('head') >= 0);
-  const cap = BABYLON.MeshBuilder.CreateBox('cap', { width: 0.34, height: 0.1, depth: 0.34 }, scene);
+  const cap = CreateBox('cap', { width: 0.34, height: 0.1, depth: 0.34 }, scene);
   cap.material = M.black;
   cap.parent = head || a;
   cap.position.y = 0.2;
-  const brim = BABYLON.MeshBuilder.CreateBox('brim', { width: 0.3, height: 0.04, depth: 0.22 }, scene);
+  const brim = CreateBox('brim', { width: 0.3, height: 0.04, depth: 0.22 }, scene);
   brim.material = M.black;
   brim.parent = head || a;
   brim.position.set(0, 0.16, 0.26);
-  const mask = BABYLON.MeshBuilder.CreateBox('mask', { width: 0.32, height: 0.09, depth: 0.1 }, scene);
+  const mask = CreateBox('mask', { width: 0.32, height: 0.09, depth: 0.1 }, scene);
   mask.material = M.black;
   mask.parent = head || a;
   mask.position.set(0, 0.02, 0.16);
@@ -1217,7 +1240,7 @@ let limbs = null;
 let walkT = 0;
 let swing = 0;
 let idleAmp = 0;
-const follow = new BABYLON.Vector3(0, 0, 0);
+const follow = new Vector3(0, 0, 0);
 
 function buildCity(seed) {
   clearCity();
@@ -1225,44 +1248,44 @@ function buildCity(seed) {
   solids = [];
   seedEl.textContent = 'seed: ' + seed;
 
-  const gm = new BABYLON.StandardMaterial('g', scene);
-  const gdt = new BABYLON.DynamicTexture('gt', { width: SIZE * 16, height: SIZE * 16 }, scene, true);
+  const gm = new StandardMaterial('g', scene);
+  const gdt = new DynamicTexture('gt', { width: SIZE * 16, height: SIZE * 16 }, scene, true);
   gdt.getContext().drawImage(bakeGround(), 0, 0);
   gdt.update();
   gm.diffuseTexture = gdt;
-  gm.specularColor = new BABYLON.Color3(0, 0, 0);
+  gm.specularColor = new Color3(0, 0, 0);
   groundMats = [gm];
   buildHeightGrid();
   groundMesh = buildGroundMesh(gm);
 
   waterMats = [0, 1].map(f => {
-    const m = new BABYLON.StandardMaterial('w', scene);
-    const wt = new BABYLON.DynamicTexture('wt' + f, { width: 16, height: 16 }, scene, true);
+    const m = new StandardMaterial('w', scene);
+    const wt = new DynamicTexture('wt' + f, { width: 16, height: 16 }, scene, true);
     wt.getContext().drawImage(flat.water[f], 0, 0);
     wt.update();
     wt.uScale = SIZE;
     wt.vScale = SIZE;
-    wt.wrapAddressModeU = BABYLON.Texture.WRAP_ADDRESSMODE;
-    wt.wrapAddressModeV = BABYLON.Texture.WRAP_ADDRESSMODE;
+    wt.wrapAddressModeU = Texture.WRAP_ADDRESSMODE;
+    wt.wrapAddressModeV = Texture.WRAP_ADDRESSMODE;
     m.diffuseTexture = wt;
     m.alpha = 0.95;
-    m.specularColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+    m.specularColor = new Color3(0.15, 0.15, 0.15);
     return m;
   });
-  waterPlane = BABYLON.MeshBuilder.CreateGround('water', { width: SIZE, height: SIZE }, scene);
-  waterPlane.position = new BABYLON.Vector3(SIZE / 2 - 0.5, -0.08, SIZE / 2 - 0.5);
+  waterPlane = CreateGround('water', { width: SIZE, height: SIZE }, scene);
+  waterPlane.position = new Vector3(SIZE / 2 - 0.5, -0.08, SIZE / 2 - 0.5);
   waterPlane.material = waterMats[0];
 
-  shadowMat = new BABYLON.StandardMaterial('sh', scene);
-  shadowMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
-  shadowMat.emissiveColor = new BABYLON.Color3(0, 0, 0);
-  shadowMat.specularColor = new BABYLON.Color3(0, 0, 0);
+  shadowMat = new StandardMaterial('sh', scene);
+  shadowMat.diffuseColor = new Color3(0, 0, 0);
+  shadowMat.emissiveColor = new Color3(0, 0, 0);
+  shadowMat.specularColor = new Color3(0, 0, 0);
   shadowMat.alpha = 0.32;
   shadowMat.backFaceCulling = false;
 
   for (const b of city.buildings) {
     const a = spawn('bld_' + b.si + '_' + b.pi);
-    a.position = new BABYLON.Vector3(b.x + b.w / 2 - 0.5, 0, b.y + b.d / 2 - 0.5);
+    a.position = new Vector3(b.x + b.w / 2 - 0.5, 0, b.y + b.d / 2 - 0.5);
     a.scaling.y = 0.65 + ((b.x * 13 + b.y * 7 + b.si * 5) % 10) / 11;
     a.scaling.x = a.scaling.z = 0.92 + ((b.x + b.y * 3) % 4) * 0.03;
     blob(b.w + 0.25, b.d + 0.25, a);
@@ -1273,7 +1296,7 @@ function buildCity(seed) {
     if (dcr.kind === 'tree') {
       solids.push({ x, y: z, r: 0.28 });
       const a = spawn(dcr.v ? 'tree_cone' : 'tree_round');
-      a.position = new BABYLON.Vector3(x, heightAt(x, z), z);
+      a.position = new Vector3(x, heightAt(x, z), z);
       a.rotation.y = ((x * 7 + z * 13) % 628) / 100;
       const sc = 0.9 + ((x + z) % 3) * 0.12;
       a.scaling.setAll(sc);
@@ -1281,7 +1304,7 @@ function buildCity(seed) {
     } else if (dcr.kind === 'lamp') {
       solids.push({ x, y: z, r: 0.15 });
       const a = spawn('lamp');
-      a.position = new BABYLON.Vector3(x, heightAt(x, z), z);
+      a.position = new Vector3(x, heightAt(x, z), z);
       blob(0.3, 0.3, a);
     } else if (dcr.kind === 'car') {
       const sol = dcr.orient === 'ry'
@@ -1290,7 +1313,7 @@ function buildCity(seed) {
       solids.push(sol);
       const a = spawn('car');
       deinstance(a, 'cb');
-      a.position = new BABYLON.Vector3(x, 0, z);
+      a.position = new Vector3(x, 0, z);
       if (dcr.orient === 'ry') a.rotation.y = Math.PI / 2;
       parked.push({
         node: a,
@@ -1317,14 +1340,14 @@ function buildCity(seed) {
       for (const m of a.getChildMeshes()) {
         if (m.material && m.material.name.indexOf('car_body') === 0) {
           const cm = m.material.clone();
-          cm.albedoColor = new BABYLON.Color3(col[0], col[1], col[2]);
+          cm.albedoColor = new Color3(col[0], col[1], col[2]);
           m.material = cm;
           cityMats.push(cm);
         }
       }
     } else {
       const a = spawn('boat');
-      a.position = new BABYLON.Vector3(x, -0.05, z);
+      a.position = new Vector3(x, -0.05, z);
       a.rotation.y = ((x * 31) % 2) ? Math.PI / 2 : 0;
       blob(1.9, 0.85, a, 0.03);
     }
@@ -1337,7 +1360,7 @@ function buildCity(seed) {
   camp.t = 0;
   playerNode = spawn('player');
   P.node = playerNode;
-  playerNode.position = new BABYLON.Vector3(P.x, 0, P.y);
+  playerNode.position = new Vector3(P.x, 0, P.y);
   blob(0.5, 0.5, playerNode);
   limbs = { ll: null, lr: null, al: null, ar: null, bb: null, bbY: 0 };
   playerNode.getChildMeshes().forEach(m => {
