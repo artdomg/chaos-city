@@ -1053,19 +1053,18 @@ function updateParked(dt) {
       pk.sol.y = pk.y;
     }
     fireAnim(pk);
-    if (pk.crashT > 7) {
+    // Los aparcados no reaparecen: al apagarse, el chasis se queda donde haya
+    // caído. Sigue en la lista para que una explosión cercana lo mande a volar.
+    if (pk.crashT > 7 && !pk.wreck) {
       douse(pk);
-      pk.crashed = false;
-      pk.fy = 0;
-      pk.x = pk.ox;
-      pk.y = pk.oy;
-      pk.node.rotation.x = 0;
-      pk.node.rotation.z = 0;
-      pk.node.position.set(pk.x, 0, pk.y);
-      if (pk.sol) {
-        pk.sol.x = pk.x;
-        pk.sol.y = pk.y;
-      }
+      pk.wreck = true;
+    }
+    // flyStep sólo amortigua el giro al tocar suelo, así que sin esto el chasis
+    // se quedaría rodando despacio para siempre.
+    if (pk.wreck && !pk.fy) {
+      pk.sx = 0;
+      pk.sy = 0;
+      pk.sz = 0;
     }
   }
 }
@@ -1496,8 +1495,6 @@ function buildCity(seed) {
         node: a,
         x,
         y: z,
-        ox: x,
-        oy: z,
         sol,
         axis: dcr.orient === 'ry' ? 'y' : 'x',
         dir: 1,
